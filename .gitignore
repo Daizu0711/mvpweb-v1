@@ -17,6 +17,7 @@ outputs/
 uploads/
 data/training_records.json
 data/users.json
+data/inference_results.json
 
 # Local large model binaries
 *.pth

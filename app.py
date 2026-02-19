@@ -8,6 +8,13 @@ import requests
 from datetime import datetime
 import traceback
 from pose_analyzer import PoseAnalyzer, PoseComparator
+from deficiency import (
+    LIMB_SEGMENTS,
+    LIMB_SEGMENT_NAMES_JA,
+    calculate_body_ratios,
+    detect_deficiency,
+    average_ratios_from_poses,
+)
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -17,6 +24,10 @@ OUTPUT_FOLDER = 'outputs'
 DATA_FOLDER = 'data'
 DATA_FILE = os.path.join(DATA_FOLDER, 'training_records.json')
 USERS_FILE = os.path.join(DATA_FOLDER, 'users.json')
+INFERENCE_RESULTS_FILE = os.path.join(DATA_FOLDER, 'inference_results.json')
+INFERENCE_SERVER_URL = os.environ.get('INFERENCE_SERVER_URL', '').rstrip('/')
+INFERENCE_TIMEOUT = int(os.environ.get('INFERENCE_TIMEOUT', '240'))
+INFERENCE_MODE_DEFAULT = os.environ.get('INFERENCE_MODE', 'auto')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
@@ -42,85 +53,6 @@ def save_users(users):
     except Exception as e:
         print(f"⚠ Failed to save users: {e}")
 
-# Limb segment definitions: (start_keypoint_index, end_keypoint_index)
-LIMB_SEGMENTS = {
-    'left_upper_arm': (5, 7),    # left_shoulder -> left_elbow
-    'left_forearm': (7, 9),      # left_elbow -> left_wrist
-    'right_upper_arm': (6, 8),   # right_shoulder -> right_elbow
-    'right_forearm': (8, 10),    # right_elbow -> right_wrist
-    'left_thigh': (11, 13),      # left_hip -> left_knee
-    'left_shin': (13, 15),       # left_knee -> left_ankle
-    'right_thigh': (12, 14),     # right_hip -> right_knee
-    'right_shin': (14, 16),      # right_knee -> right_ankle
-}
-
-def calculate_body_ratios(pose):
-    """Calculate limb-length ratios relative to torso height from a pose."""
-    if pose is None or 'keypoints' not in pose:
-        return None
-    kp = pose['keypoints']
-    # Torso height = distance from shoulder_center to hip_center
-    if kp[5][2] < 0.3 or kp[6][2] < 0.3 or kp[11][2] < 0.3 or kp[12][2] < 0.3:
-        return None
-    shoulder_center = (np.array(kp[5][:2]) + np.array(kp[6][:2])) / 2
-    hip_center = (np.array(kp[11][:2]) + np.array(kp[12][:2])) / 2
-    torso_height = np.linalg.norm(shoulder_center - hip_center)
-    if torso_height < 1:
-        return None
-
-    ratios = {}
-    for seg_name, (i, j) in LIMB_SEGMENTS.items():
-        if kp[i][2] >= 0.3 and kp[j][2] >= 0.3:
-            length = np.linalg.norm(np.array(kp[i][:2]) - np.array(kp[j][:2]))
-            ratios[seg_name] = length / torso_height
-        else:
-            ratios[seg_name] = None
-    return ratios
-
-LIMB_SEGMENT_NAMES_JA = {
-    'left_upper_arm': '左上腕',
-    'left_forearm': '左前腕',
-    'right_upper_arm': '右上腕',
-    'right_forearm': '右前腕',
-    'left_thigh': '左太もも',
-    'left_shin': '左すね',
-    'right_thigh': '右太もも',
-    'right_shin': '右すね',
-}
-
-def detect_deficiency(current_ratios, registered_ratios, threshold=0.5):
-    """Detect limb deficiency by comparing current ratios against registered T-pose ratios.
-
-    If a limb ratio is less than (1 - threshold) of the registered ratio,
-    it is flagged as deficient (potential missing/occluded limb).
-    """
-    deficiencies = []
-    if not current_ratios or not registered_ratios:
-        return deficiencies
-    for seg_name, reg_ratio in registered_ratios.items():
-        if reg_ratio is None:
-            continue
-        cur_ratio = current_ratios.get(seg_name)
-        if cur_ratio is None:
-            # Not detected at all -> deficiency
-            deficiencies.append({
-                'segment': seg_name,
-                'segment_ja': LIMB_SEGMENT_NAMES_JA.get(seg_name, seg_name),
-                'reason': 'not_detected',
-                'registered_ratio': reg_ratio,
-                'current_ratio': None
-            })
-        elif cur_ratio < reg_ratio * (1 - threshold):
-            deficiencies.append({
-                'segment': seg_name,
-                'segment_ja': LIMB_SEGMENT_NAMES_JA.get(seg_name, seg_name),
-                'reason': 'ratio_deviation',
-                'registered_ratio': reg_ratio,
-                'current_ratio': cur_ratio,
-                'deviation': (reg_ratio - cur_ratio) / reg_ratio * 100
-            })
-    return deficiencies
-
 def load_training_records():
     if not os.path.exists(DATA_FILE):
         return []
@@ -144,6 +76,92 @@ def append_training_record(record):
     records = load_training_records()
     records.append(record)
     save_training_records(records)
+
+def load_inference_results():
+    if not os.path.exists(INFERENCE_RESULTS_FILE):
+        return []
+    try:
+        with open(INFERENCE_RESULTS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except Exception as e:
+        print(f"⚠ Failed to load inference results: {e}")
+    return []
+
+def save_inference_results(results):
+    try:
+        with open(INFERENCE_RESULTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"⚠ Failed to save inference results: {e}")
+
+def append_inference_result(result):
+    results = load_inference_results()
+    results.append(result)
+    save_inference_results(results)
+
+def ping_colab_server():
+    if not INFERENCE_SERVER_URL:
+        return False, {'error': 'INFERENCE_SERVER_URL is not set'}
+
+    try:
+        response = requests.get(
+            f'{INFERENCE_SERVER_URL}/ping',
+            timeout=min(15, INFERENCE_TIMEOUT)
+        )
+        if response.status_code != 200:
+            return False, {'error': f'Ping status {response.status_code}'}
+        return True, response.json()
+    except Exception as e:
+        return False, {'error': str(e)}
+
+def build_analysis_record(compare_mode, self_improved, use_3d, comparison_result):
+    record = {
+        'timestamp': datetime.now().isoformat(),
+        'compare_mode': compare_mode,
+        'self_improved': self_improved if compare_mode == 'self_vs_self' else None,
+        'overall_score': comparison_result['overall_score'],
+        'joint_scores': comparison_result['joint_scores'],
+        'temporal_alignment': comparison_result['temporal_alignment'],
+        'use_3d': use_3d
+    }
+    return record
+
+def call_colab_inference(reference_path, comparison_path, payload, registered_ratios):
+    with open(reference_path, 'rb') as ref_file, open(comparison_path, 'rb') as comp_file:
+        files = {
+            'reference_video': (
+                os.path.basename(reference_path),
+                ref_file,
+                'application/octet-stream'
+            ),
+            'comparison_video': (
+                os.path.basename(comparison_path),
+                comp_file,
+                'application/octet-stream'
+            ),
+        }
+
+        data = {
+            'use_3d': json.dumps(bool(payload.get('use_3d', False))),
+            'use_vitpose': json.dumps(bool(payload.get('use_vitpose', True))),
+            'model_variant': payload.get('model_variant', 'vitpose-b'),
+            'username': payload.get('username', ''),
+            'registered_ratios': json.dumps(registered_ratios) if registered_ratios else ''
+        }
+
+        response = requests.post(
+            f'{INFERENCE_SERVER_URL}/infer',
+            files=files,
+            data=data,
+            timeout=INFERENCE_TIMEOUT
+        )
+
+    if response.status_code != 200:
+        raise RuntimeError(f'Colab inference failed: {response.status_code} {response.text}')
+
+    return response.json()
 
 def aggregate_joint_scores(records):
     sums = {}
@@ -253,12 +271,78 @@ def analyze_videos():
         compare_mode = data.get('compare_mode', 'pro_vs_self')
         self_improved = data.get('self_improved', None)
         username = data.get('username', '').strip()
+        inference_mode = data.get('inference_mode', INFERENCE_MODE_DEFAULT)
         
         if not reference_path or not comparison_path:
             return jsonify({'error': 'Both videos are required'}), 400
 
         if compare_mode == 'self_vs_self' and self_improved is None:
             return jsonify({'error': 'Self vs Self mode requires self_improved flag'}), 400
+
+        users = load_users()
+        user_data = users.get(username) if username else None
+        registered_ratios = user_data.get('body_ratios') if user_data else None
+
+        should_try_remote = inference_mode in ['remote', 'auto'] and bool(INFERENCE_SERVER_URL)
+        if should_try_remote:
+            online, ping_data = ping_colab_server()
+            if online:
+                try:
+                    remote_result = call_colab_inference(
+                        reference_path,
+                        comparison_path,
+                        data,
+                        registered_ratios
+                    )
+
+                    if not remote_result.get('success'):
+                        raise RuntimeError(remote_result.get('error', 'Unknown remote inference error'))
+
+                    response_data = {
+                        'success': True,
+                        'score': remote_result.get('score', 0.0),
+                        'joint_scores': remote_result.get('joint_scores', {}),
+                        'temporal_alignment': remote_result.get('temporal_alignment', 0.0),
+                        'analysis': remote_result.get('analysis', ''),
+                        'output_video': None,
+                        'reference_overlay': None,
+                        'comparison_overlay': None,
+                        'frame_scores': remote_result.get('frame_scores', []),
+                        'use_3d': remote_result.get('use_3d', use_3d),
+                        'username': username,
+                        'deficiencies': remote_result.get('deficiencies', []),
+                        'inference_backend': 'colab',
+                        'colab_ping': ping_data,
+                    }
+
+                    comparison_result = {
+                        'overall_score': response_data['score'],
+                        'joint_scores': response_data['joint_scores'],
+                        'temporal_alignment': response_data['temporal_alignment'],
+                        'frame_scores': response_data['frame_scores']
+                    }
+
+                    append_training_record(
+                        build_analysis_record(compare_mode, self_improved, response_data['use_3d'], comparison_result)
+                    )
+                    append_inference_result({
+                        'timestamp': datetime.now().isoformat(),
+                        'username': username,
+                        'backend': 'colab',
+                        'compare_mode': compare_mode,
+                        'result': response_data
+                    })
+
+                    if not response_data['analysis']:
+                        response_data['analysis'] = generate_ollama_analysis(comparison_result)
+
+                    return jsonify(response_data)
+                except Exception as e:
+                    print(f"⚠ Remote inference failed: {e}")
+                    if inference_mode == 'remote':
+                        return jsonify({'error': f'Colab inference failed: {e}'}), 502
+            elif inference_mode == 'remote':
+                return jsonify({'error': f'Colab is offline: {ping_data.get("error", "unknown")}'}), 503
         
         # Initialize analyzer with VitPose options
         pose_analyzer = init_analyzer(
@@ -351,15 +435,7 @@ def analyze_videos():
 
         # Save training record
         try:
-            record = {
-                'timestamp': datetime.now().isoformat(),
-                'compare_mode': compare_mode,
-                'self_improved': self_improved if compare_mode == 'self_vs_self' else None,
-                'overall_score': comparison_result['overall_score'],
-                'joint_scores': comparison_result['joint_scores'],
-                'temporal_alignment': comparison_result['temporal_alignment'],
-                'use_3d': use_3d
-            }
+            record = build_analysis_record(compare_mode, self_improved, use_3d, comparison_result)
 
             if use_3d and visualization_3d_paths and 'metrics_3d' in visualization_3d_paths:
                 record['metrics_3d'] = visualization_3d_paths['metrics_3d']
@@ -453,7 +529,8 @@ def analyze_videos():
             'comparison_overlay': comp_overlay_filename,
             'frame_scores': comparison_result.get('frame_scores', []),
             'use_3d': use_3d,
-            'username': username
+            'username': username,
+            'inference_backend': 'local'
         }
 
         # Add 3D data if available
@@ -461,27 +538,30 @@ def analyze_videos():
             response_data['visualization_3d'] = visualization_3d_paths
 
         # Deficiency detection if user has registered T-pose
-        if username:
-            users = load_users()
-            user_data = users.get(username)
-            if user_data and user_data.get('body_ratios'):
-                registered_ratios = user_data['body_ratios']
-                # Calculate average ratios from comparison video frames
-                frame_ratios_list = []
-                for pose in comparison_poses:
-                    if pose is not None:
-                        fr = calculate_body_ratios(pose)
-                        if fr:
-                            frame_ratios_list.append(fr)
-                if frame_ratios_list:
-                    # Average ratios across all frames
-                    avg_ratios = {}
-                    for seg_name in LIMB_SEGMENTS:
-                        vals = [fr[seg_name] for fr in frame_ratios_list if fr.get(seg_name) is not None]
-                        avg_ratios[seg_name] = sum(vals) / len(vals) if vals else None
-                    deficiencies = detect_deficiency(avg_ratios, registered_ratios)
-                    if deficiencies:
-                        response_data['deficiencies'] = deficiencies
+        if registered_ratios:
+            avg_ratios = average_ratios_from_poses(comparison_poses)
+            if avg_ratios:
+                deficiencies = detect_deficiency(avg_ratios, registered_ratios)
+                if deficiencies:
+                    response_data['deficiencies'] = deficiencies
+
+        try:
+            append_inference_result({
+                'timestamp': datetime.now().isoformat(),
+                'username': username,
+                'backend': 'local',
+                'compare_mode': compare_mode,
+                'result': {
+                    'success': True,
+                    'score': response_data['score'],
+                    'joint_scores': response_data['joint_scores'],
+                    'temporal_alignment': response_data['temporal_alignment'],
+                    'deficiencies': response_data.get('deficiencies', []),
+                    'use_3d': response_data['use_3d']
+                }
+            })
+        except Exception as e:
+            print(f"⚠ Failed to save inference result: {e}")
 
         return jsonify(response_data)
     
@@ -787,6 +867,27 @@ def get_training_summary():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'analyzer': 'ready'})
+
+@app.route('/api/colab/ping', methods=['GET'])
+def colab_ping():
+    online, data = ping_colab_server()
+    return jsonify({
+        'success': online,
+        'online': online,
+        'inference_server_url': INFERENCE_SERVER_URL,
+        'inference_mode_default': INFERENCE_MODE_DEFAULT,
+        'detail': data
+    }), 200 if online else 503
+
+@app.route('/api/inference/results', methods=['GET'])
+def get_inference_results():
+    limit = int(request.args.get('limit', 20))
+    all_results = load_inference_results()
+    return jsonify({
+        'success': True,
+        'count': len(all_results),
+        'results': all_results[-max(1, min(200, limit)):]
+    })
 
 # --- User & T-pose endpoints ---
 

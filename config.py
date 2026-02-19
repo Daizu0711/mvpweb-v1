@@ -10,6 +10,11 @@ OLLAMA_URL = 'http://localhost:11434'
 OLLAMA_MODEL = 'llama3.2'  # 使用するモデル名
 OLLAMA_TIMEOUT = 60  # タイムアウト（秒）
 
+# Render API -> Colab 推論設定
+INFERENCE_SERVER_URL = ''  # 例: https://xxxx.ngrok-free.app
+INFERENCE_TIMEOUT = 240
+INFERENCE_MODE_DEFAULT = 'auto'  # auto / local / remote
+
 # 姿勢推定設定
 POSE_CONFIDENCE_THRESHOLD = 0.3  # 信頼度の閾値
 SAMPLE_RATE = 1  # フレームサンプリングレート（1=全フレーム）

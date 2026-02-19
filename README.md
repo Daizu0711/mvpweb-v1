@@ -90,6 +90,38 @@ mkdir -p models
 wget https://download.openmmlab.com/mmpose/v1/body_2d_keypoint/topdown_heatmap/coco/vitpose_base_coco_256x192-216eae50_20221122.pth -O models/vitpose.pth
 ```
 https://huggingface.co/JunkyByte/easy_ViTPose/tree/main/torch/coco_25
+
+## ☁️ Render API + Colab GPU構成（新）
+
+以下の分離構成で動かせます。
+
+- フロント: 動画アップロード
+- Render API (`app.py`): 保存・Colab生存確認・推論依頼・結果保存
+- Colab推論サーバ (`inference_server.py`): VitPose推定・欠損検出・JSON返却
+
+### Render側（APIサーバ）
+
+```bash
+# Colab推論サーバURLを指定（例: ngrok URL）
+export INFERENCE_SERVER_URL="https://YOUR_COLAB_ENDPOINT"
+export INFERENCE_MODE="auto"   # auto: Colab優先、失敗時ローカル
+export INFERENCE_TIMEOUT="240"
+
+python app.py
+```
+
+### Colab側（GPU推論サーバ）
+
+```bash
+python inference_server.py
+```
+
+Colab側には `GET /ping` と `POST /infer` が立ちます。
+
+### 追加API
+
+- `GET /api/colab/ping`: Renderから見たColab生存確認
+- `GET /api/inference/results`: 推論結果履歴（`data/inference_results.json`）
 ## 🎬 使用方法
 
 ### 1. サーバーの起動

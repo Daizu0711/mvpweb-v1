@@ -388,6 +388,17 @@
             <div class="options-section">
                 <h3 style="margin-bottom: 15px; color: #333;">分析オプション</h3>
 
+                <!-- Remote Inference Option -->
+                <div class="option-group">
+                    <label>
+                        <input type="checkbox" id="useRemoteInference" checked>
+                        <span style="display: flex; flex-direction: column;">
+                            <strong>☁️ Colab GPU推論を優先（Render API経由）</strong>
+                            <small id="colabStatusText" style="color: #666; margin-left: 30px;">Colab状態を確認中...</small>
+                        </span>
+                    </label>
+                </div>
+
                 <!-- Comparison Mode -->
                 <div class="option-group">
                     <label style="display: block; margin-bottom: 10px; color: #666;">
@@ -782,6 +793,25 @@
         let comparisonVideoPath = null;
         let current3DData = null;
 
+        async function refreshColabStatus() {
+            const statusElement = document.getElementById('colabStatusText');
+            try {
+                const response = await fetch(`${API_URL}/colab/ping`);
+                const result = await response.json();
+
+                if (result.online) {
+                    statusElement.textContent = 'Colabオンライン（リモート推論可能）';
+                    statusElement.style.color = '#2e7d32';
+                } else {
+                    statusElement.textContent = 'Colabオフライン（ローカル推論にフォールバック）';
+                    statusElement.style.color = '#ef6c00';
+                }
+            } catch (error) {
+                statusElement.textContent = 'Colab状態確認失敗（ローカル推論にフォールバック）';
+                statusElement.style.color = '#ef6c00';
+            }
+        }
+
         // --- T-pose file name display ---
         document.getElementById('tposeImage').addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -1005,6 +1035,7 @@
             const compareMode = document.getElementById('compareMode').value;
             const selfImproved = compareMode === 'self_vs_self' ? getSelfImprovedValue() : null;
             const username = document.getElementById('usernameInput').value.trim();
+            const useRemoteInference = document.getElementById('useRemoteInference').checked;
 
             // Show loading
             document.getElementById('loading').classList.add('active');
@@ -1024,7 +1055,8 @@
                         model_variant: vitposeModel,
                         compare_mode: compareMode,
                         self_improved: selfImproved,
-                        username: username
+                        username: username,
+                        inference_mode: useRemoteInference ? 'auto' : 'local'
                     })
                 });
 
@@ -1239,6 +1271,8 @@
             };
             return names[joint] || joint;
         }
+
+        refreshColabStatus();
     </script>
 </body>
 </html>
