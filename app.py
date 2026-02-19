@@ -36,6 +36,7 @@ DATA_FOLDER = 'data'
 INFERENCE_SERVER_URL = os.environ.get('INFERENCE_SERVER_URL', '').rstrip('/')
 INFERENCE_TIMEOUT = int(os.environ.get('INFERENCE_TIMEOUT', '240'))
 INFERENCE_MODE_DEFAULT = os.environ.get('INFERENCE_MODE', 'auto')
+FORCE_MEDIAPIPE_ON_NO_GPU = os.environ.get('FORCE_MEDIAPIPE_ON_NO_GPU', 'true').lower() == 'true'
 COLAB_NOTEBOOK_PATH = os.environ.get('COLAB_NOTEBOOK_PATH', 'colab_inference.ipynb')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -163,12 +164,13 @@ def generate_training_summary(records):
 
     return summary
 
-def init_analyzer(use_vitpose=True, model_variant='vitpose-b'):
+def init_analyzer(use_vitpose=True, model_variant='vitpose-b', force_mediapipe=False):
     global analyzer
     if analyzer is None:
         analyzer = PoseAnalyzer(
             use_vitpose=use_vitpose,
-            model_variant=model_variant
+            model_variant=model_variant,
+            force_mediapipe=force_mediapipe
         )
     return analyzer
 
@@ -230,6 +232,9 @@ def analyze_videos():
         registered_ratios = user_data.get('body_ratios') if user_data else None
 
         should_try_remote = inference_mode in ['remote', 'auto'] and bool(INFERENCE_SERVER_URL)
+        remote_failed = False
+        force_mediapipe = False
+
         if should_try_remote:
             online, ping_data = ping_colab_server()
             if online:
@@ -285,15 +290,26 @@ def analyze_videos():
                     return jsonify(response_data)
                 except Exception as e:
                     print(f"⚠ Remote inference failed: {e}")
+                    remote_failed = True
                     if inference_mode == 'remote':
                         return jsonify({'error': f'Colab inference failed: {e}'}), 502
-            elif inference_mode == 'remote':
-                return jsonify({'error': f'Colab is offline: {ping_data.get("error", "unknown")}'}), 503
+            else:
+                remote_failed = True
+                if inference_mode == 'remote':
+                    return jsonify({'error': f'Colab is offline: {ping_data.get("error", "unknown")}'}), 503
+        elif inference_mode in ['remote', 'auto'] and FORCE_MEDIAPIPE_ON_NO_GPU:
+            remote_failed = True
+
+        if FORCE_MEDIAPIPE_ON_NO_GPU and inference_mode in ['remote', 'auto'] and remote_failed:
+            force_mediapipe = True
+            use_vitpose = True
+            print('No GPU service connection. Forcing MediaPipe fallback.')
         
         # Initialize analyzer with VitPose options
         pose_analyzer = init_analyzer(
             use_vitpose=use_vitpose,
-            model_variant=model_variant
+            model_variant=model_variant,
+            force_mediapipe=force_mediapipe
         )
         
         # Extract poses from both videos

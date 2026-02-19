@@ -17,7 +17,7 @@ class VitPoseDetector:
     Supports multiple model variants: base, large, huge
     """
     
-    def __init__(self, model_name='vitpose-b', device='cuda'):
+    def __init__(self, model_name='vitpose-b', device='cuda', force_mediapipe=False):
         """
         Initialize VitPose detector
         
@@ -29,6 +29,7 @@ class VitPoseDetector:
         self.model_name = model_name
         self.model = None
         self.cfg = None
+        self.force_mediapipe = force_mediapipe
         
         # Model configurations
         self.model_configs = {
@@ -58,6 +59,11 @@ class VitPoseDetector:
     def initialize_model(self):
         """Initialize VitPose model with MMPose"""
         try:
+            if self.force_mediapipe:
+                self.use_mmpose = False
+                self._initialize_fallback()
+                return
+
             # Try to use MMPose
             from mmpose.apis import init_model, inference_topdown
             from mmpose.structures import merge_data_samples

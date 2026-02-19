@@ -45,7 +45,17 @@ def infer():
     comp_path = None
 
     try:
-        if 'reference_video' not in request.files or 'comparison_video' not in request.files:
+        has_reference = 'reference_video' in request.files
+        has_comparison = 'comparison_video' in request.files
+
+        if not has_reference and not has_comparison:
+            print('Skip inference: reference_video and comparison_video are both missing')
+            return jsonify({
+                'success': False,
+                'error': 'reference_video and comparison_video are required'
+            }), 200
+
+        if not has_reference or not has_comparison:
             return jsonify({'success': False, 'error': 'reference_video and comparison_video are required'}), 400
 
         reference_file = request.files['reference_video']

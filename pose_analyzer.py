@@ -8,10 +8,11 @@ import traceback
 class PoseAnalyzer:
     """VitPose-based pose extraction and analysis"""
     
-    def __init__(self, use_vitpose=True, model_variant='vitpose-b'):
+    def __init__(self, use_vitpose=True, model_variant='vitpose-b', force_mediapipe=False):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.use_vitpose = use_vitpose
         self.model_variant = model_variant
+        self.force_mediapipe = force_mediapipe
         
         print(f"Using device: {self.device}")
         
@@ -27,7 +28,8 @@ class PoseAnalyzer:
             
             self.vitpose = VitPoseDetector(
                 model_name=self.model_variant,
-                device=self.device
+                device=self.device,
+                force_mediapipe=self.force_mediapipe
             )
             self.detector_ready = True
             print(f"✓ VitPose ({self.model_variant}) initialized successfully")
