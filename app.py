@@ -7,6 +7,8 @@ import json
 import requests
 from datetime import datetime
 import traceback
+import tempfile
+import shutil
 from pose_analyzer import PoseAnalyzer, PoseComparator
 from deficiency import (
     LIMB_SEGMENTS,
@@ -15,6 +17,15 @@ from deficiency import (
     detect_deficiency,
     average_ratios_from_poses,
 )
+from supabase_db import (
+    init_supabase,
+    load_users,
+    save_user,
+    load_training_records,
+    append_training_record,
+    load_inference_results,
+    append_inference_result,
+)
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -22,99 +33,23 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'outputs'
 DATA_FOLDER = 'data'
-DATA_FILE = os.path.join(DATA_FOLDER, 'training_records.json')
-USERS_FILE = os.path.join(DATA_FOLDER, 'users.json')
-INFERENCE_RESULTS_FILE = os.path.join(DATA_FOLDER, 'inference_results.json')
 INFERENCE_SERVER_URL = os.environ.get('INFERENCE_SERVER_URL', '').rstrip('/')
 INFERENCE_TIMEOUT = int(os.environ.get('INFERENCE_TIMEOUT', '240'))
 INFERENCE_MODE_DEFAULT = os.environ.get('INFERENCE_MODE', 'auto')
+COLAB_NOTEBOOK_PATH = os.environ.get('COLAB_NOTEBOOK_PATH', 'colab_inference.ipynb')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(DATA_FOLDER, exist_ok=True)
+
+init_supabase()
 
 analyzer = None
 
 # --- User data management ---
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    try:
-        with open(USERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"⚠ Failed to load users: {e}")
-    return {}
 
-def save_users(users):
-    try:
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"⚠ Failed to save users: {e}")
 
-def load_training_records():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                return data
-    except Exception as e:
-        print(f"⚠ Failed to load training records: {e}")
-    return []
 
-def save_training_records(records):
-    try:
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(records, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"⚠ Failed to save training records: {e}")
-
-def append_training_record(record):
-    records = load_training_records()
-    records.append(record)
-    save_training_records(records)
-
-def load_inference_results():
-    if not os.path.exists(INFERENCE_RESULTS_FILE):
-        return []
-    try:
-        with open(INFERENCE_RESULTS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                return data
-    except Exception as e:
-        print(f"⚠ Failed to load inference results: {e}")
-    return []
-
-def save_inference_results(results):
-    try:
-        with open(INFERENCE_RESULTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"⚠ Failed to save inference results: {e}")
-
-def append_inference_result(result):
-    results = load_inference_results()
-    results.append(result)
-    save_inference_results(results)
-
-def ping_colab_server():
-    if not INFERENCE_SERVER_URL:
-        return False, {'error': 'INFERENCE_SERVER_URL is not set'}
-
-    try:
-        response = requests.get(
-            f'{INFERENCE_SERVER_URL}/ping',
-            timeout=min(15, INFERENCE_TIMEOUT)
-        )
-        if response.status_code != 200:
-            return False, {'error': f'Ping status {response.status_code}'}
-        return True, response.json()
-    except Exception as e:
-        return False, {'error': str(e)}
 
 def build_analysis_record(compare_mode, self_improved, use_3d, comparison_result):
     record = {
@@ -128,40 +63,51 @@ def build_analysis_record(compare_mode, self_improved, use_3d, comparison_result
     }
     return record
 
-def call_colab_inference(reference_path, comparison_path, payload, registered_ratios):
-    with open(reference_path, 'rb') as ref_file, open(comparison_path, 'rb') as comp_file:
-        files = {
-            'reference_video': (
-                os.path.basename(reference_path),
-                ref_file,
-                'application/octet-stream'
-            ),
-            'comparison_video': (
-                os.path.basename(comparison_path),
-                comp_file,
-                'application/octet-stream'
-            ),
+def execute_colab_notebook(reference_path, comparison_path, use_vitpose, model_variant, use_3d, username, registered_ratios):
+    """Execute Colab inference notebook using papermill."""
+    try:
+        import papermill as pm
+        
+        # Create temporary directory for execution
+        temp_dir = tempfile.mkdtemp()
+        output_notebook = os.path.join(temp_dir, 'output.ipynb')
+        
+        # Parameters for papermill
+        parameters = {
+            'reference_video_path': reference_path,
+            'comparison_video_path': comparison_path,
+            'use_vitpose': use_vitpose,
+            'model_variant': model_variant,
+            'use_3d': use_3d,
+            'username': username,
+            'registered_ratios_json': json.dumps(registered_ratios) if registered_ratios else '{}'
         }
-
-        data = {
-            'use_3d': json.dumps(bool(payload.get('use_3d', False))),
-            'use_vitpose': json.dumps(bool(payload.get('use_vitpose', True))),
-            'model_variant': payload.get('model_variant', 'vitpose-b'),
-            'username': payload.get('username', ''),
-            'registered_ratios': json.dumps(registered_ratios) if registered_ratios else ''
-        }
-
-        response = requests.post(
-            f'{INFERENCE_SERVER_URL}/infer',
-            files=files,
-            data=data,
+        
+        print(f"Executing Colab notebook: {COLAB_NOTEBOOK_PATH}")
+        print(f"Parameters: {parameters}")
+        
+        # Execute notebook with parameters
+        pm.execute_notebook(
+            COLAB_NOTEBOOK_PATH,
+            output_notebook,
+            parameters=parameters,
             timeout=INFERENCE_TIMEOUT
         )
-
-    if response.status_code != 200:
-        raise RuntimeError(f'Colab inference failed: {response.status_code} {response.text}')
-
-    return response.json()
+        
+        # Try to read result from temporary output
+        result_file = '/tmp/vireora_result.json'
+        if os.path.exists(result_file):
+            with open(result_file, 'r', encoding='utf-8') as f:
+                result = json.load(f)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return result
+        else:
+            raise RuntimeError("Notebook executed but no result file found")
+            
+    except Exception as e:
+        print(f"⚠ Colab notebook execution failed: {e}")
+        traceback.print_exc()
+        raise
 
 def aggregate_joint_scores(records):
     sums = {}
@@ -901,7 +847,7 @@ def get_user(username):
     users = load_users()
     if username not in users:
         return jsonify({'success': False, 'error': 'User not found'}), 404
-    return jsonify({'success': True, 'user': users[username]})
+    return jsonify({'success': True, 'user': users[username] if users else {}})
 
 @app.route('/api/user/tpose', methods=['POST'])
 def register_tpose():
@@ -944,15 +890,13 @@ def register_tpose():
         if ratios is None:
             return jsonify({'error': 'Could not calculate body ratios. Ensure full body is visible in T-pose.'}), 400
 
-        # Save user data
-        users = load_users()
-        users[username] = {
+        # Save user data to Supabase
+        save_user(username, {
             'registered_at': datetime.now().isoformat(),
             'tpose_image': img_filename,
             'body_ratios': ratios,
             'tpose_keypoints': pose_serializable['keypoints']
-        }
-        save_users(users)
+        })
 
         # Build ratio display
         ratio_display = {}

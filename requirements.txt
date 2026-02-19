@@ -25,6 +25,12 @@ Pillow>=10.0.0
 # Utilities
 requests>=2.31.0
 einops>=0.7.0
+papermill>=2.4.0
+nbformat>=5.9.0
+nbclient>=0.8.0
+
+# Database
+supabase>=2.0.0
 
 # Optional: MMPose ecosystem (comment out if installation fails)
 #mmcv>=2.0.0

@@ -27,3 +27,11 @@ data/inference_results.json
 # Local cloned external repos (install via pip/mim instead)
 mmcv/
 mmpose/
+
+# Supabase / Render
+.env*
+!.env.example
+
+# Papermill temp
+.tmp/
+*.backup
