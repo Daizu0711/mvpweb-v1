@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.venv/
+
+# Runtime/generated data
+outputs/
+uploads/
+data/training_records.json
+data/users.json
+
+# Local large model binaries
+*.pth
+*.pt
+*.onnx
+
+# Local cloned external repos (install via pip/mim instead)
+mmcv/
+mmpose/

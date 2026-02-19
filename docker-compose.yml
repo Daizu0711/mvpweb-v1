@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  pose-analyzer:
+    build: .
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+      - ./models:/app/models
+    environment:
+      - FLASK_ENV=production
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  ollama_data:
+
+# Usage:
+# 1. Start services: docker-compose up -d
+# 2. Pull model: docker-compose exec ollama ollama pull llama3.2
+# 3. Access app: http://localhost:5001
+# 4. Stop services: docker-compose down

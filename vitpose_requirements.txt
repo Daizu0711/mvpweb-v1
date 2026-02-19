@@ -1,0 +1,27 @@
+# VitPose完全版 - 追加要件
+
+# MMPose ecosystem (VitPose用)
+openmim>=0.3.0
+mmcv>=2.0.0
+mmpose>=1.0.0
+mmdet>=3.0.0
+timm>=0.9.0
+
+# MediaPipe (フォールバック用)
+mediapipe>=0.10.0
+
+# Advanced visualization
+seaborn>=0.12.0
+
+# Performance optimization
+numba>=0.58.0
+
+# インストール手順:
+# 1. 基本パッケージ: pip install -r requirements-minimal.txt
+# 2. PyTorch: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# 3. VitPose: pip install -r requirements-vitpose.txt
+# または
+# pip install openmim
+# mim install mmcv
+# mim install mmpose
+# mim install mmdet

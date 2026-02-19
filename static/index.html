@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画フォーム比較分析システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .upload-box {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-box:hover {
+            border-color: #764ba2;
+            background: #f0f1ff;
+            transform: translateY(-5px);
+        }
+
+        .upload-box.active {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .upload-box h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .upload-box input[type="file"] {
+            display: none;
+        }
+
+        .upload-label {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .upload-label:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .filename {
+            margin-top: 15px;
+            color: #666;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .options-section {
+            background: #f8f9ff;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .option-group {
+            margin-bottom: 15px;
+        }
+
+        .option-group label {
+            display: flex;
+            align-items: center;
+            font-size: 1.1em;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .option-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .analyze-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 1.3em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 30px;
+        }
+
+        .analyze-btn:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .analyze-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 30px;
+            color: #667eea;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .score-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .score-number {
+            font-size: 5em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .score-label {
+            font-size: 1.3em;
+            opacity: 0.9;
+        }
+
+        .joint-scores {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .joint-score-item {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .joint-score-item h4 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .joint-score-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .analysis-box {
+            background: #f8f9ff;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .analysis-box h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .analysis-text {
+            color: #666;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            font-size: 1.05em;
+        }
+
+        .video-comparison {
+            margin-top: 30px;
+        }
+
+        .video-comparison video {
+            width: 100%;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .score-low { color: #f44336; }
+        .score-medium { color: #ff9800; }
+        .score-high { color: #4caf50; }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+
+            .main-content {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .score-number {
+                font-size: 3.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 動画フォーム比較分析システム</h1>
+            <p class="subtitle">VitPose × Ollama による高精度フォーム分析</p>
+        </header>
+
+        <div class="main-content">
+            <div class="main-tabs">
+                <button class="main-tab active" onclick="showMainTab('compare')">
+                    🎯 フォーム比較
+                </button>
+                <button class="main-tab" onclick="showMainTab('data')">
+                    📊 データ分析
+                </button>
+            </div>
+
+            <div id="comparePanel" class="main-panel active">
+                <!-- User Registration Section -->
+                <div class="user-section" style="background: #f0f4ff; padding: 25px; border-radius: 15px; margin-bottom: 30px; border: 2px solid #667eea;">
+                    <h3 style="margin-bottom: 15px; color: #333;">👤 ユーザー登録</h3>
+                    <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; margin-bottom: 5px; color: #666; font-weight: bold;">ユーザー名</label>
+                            <input type="text" id="usernameInput" placeholder="ユーザー名を入力"
+                                style="width: 100%; padding: 10px 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1em;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; margin-bottom: 5px; color: #666; font-weight: bold;">T-pose写真</label>
+                            <input type="file" id="tposeImage" accept="image/*" style="display: none;">
+                            <label class="upload-label" for="tposeImage" style="display: inline-block; font-size: 0.9em; padding: 10px 20px;">
+                                T-pose写真を選択
+                            </label>
+                            <span id="tposeFilename" style="margin-left: 10px; color: #666; font-size: 0.85em;"></span>
+                        </div>
+                        <div>
+                            <button id="registerTposeBtn" class="upload-label" style="border: none; font-size: 0.9em; padding: 10px 20px; cursor: pointer;"
+                                onclick="registerTpose()">
+                                登録
+                            </button>
+                        </div>
+                    </div>
+                    <div id="tposeStatus" style="margin-top: 10px; display: none;"></div>
+                    <div id="userRatios" style="margin-top: 15px; display: none;">
+                        <h4 style="color: #667eea; margin-bottom: 10px;">登録済み体比率</h4>
+                        <div id="userRatiosContent" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- Upload Section -->
+                <div class="upload-section">
+                <div class="upload-box" id="referenceBox">
+                    <div class="upload-icon">📹</div>
+                    <h3 id="referenceTitle">参照動画 (お手本)</h3>
+                    <label class="upload-label" for="referenceVideo">
+                        ファイルを選択
+                    </label>
+                    <input type="file" id="referenceVideo" accept="video/*">
+                    <div class="filename" id="referenceFilename"></div>
+                </div>
+
+                <div class="upload-box" id="comparisonBox">
+                    <div class="upload-icon">🎥</div>
+                    <h3 id="comparisonTitle">比較動画 (あなたのフォーム)</h3>
+                    <label class="upload-label" for="comparisonVideo">
+                        ファイルを選択
+                    </label>
+                    <input type="file" id="comparisonVideo" accept="video/*">
+                    <div class="filename" id="comparisonFilename"></div>
+                </div>
+                </div>
+
+            <!-- Options Section -->
+            <div class="options-section">
+                <h3 style="margin-bottom: 15px; color: #333;">分析オプション</h3>
+
+                <!-- Comparison Mode -->
+                <div class="option-group">
+                    <label style="display: block; margin-bottom: 10px; color: #666;">
+                        <strong>比較モード:</strong>
+                    </label>
+                    <select id="compareMode" style="padding: 8px 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1em; width: 100%; max-width: 300px;">
+                        <option value="pro_vs_self" selected>プロ vs 自分</option>
+                        <option value="self_vs_self">自分 vs 自分</option>
+                    </select>
+                    <small style="display: block; margin-top: 5px; color: #999;">
+                        ※自分 vs 自分の場合、上達ラベルを付けて学習データを保存します
+                    </small>
+                </div>
+
+                <!-- Self Improvement Label -->
+                <div class="option-group" id="selfImprovedGroup" style="margin-left: 30px; display: none;">
+                    <label style="display: block; margin-bottom: 10px; color: #666;">
+                        <strong>上達ラベル:</strong>
+                    </label>
+                    <label style="margin-right: 20px;">
+                        <input type="radio" name="selfImproved" value="true" checked>
+                        上達した
+                    </label>
+                    <label>
+                        <input type="radio" name="selfImproved" value="false">
+                        上達していない
+                    </label>
+                </div>
+                
+                <!-- VitPose Option -->
+                <div class="option-group">
+                    <label>
+                        <input type="checkbox" id="useVitpose" checked>
+                        <span style="display: flex; flex-direction: column;">
+                            <strong>🎯 VitPose高精度検出を使用</strong>
+                            <small style="color: #666; margin-left: 30px;">Vision Transformerベースの最先端姿勢推定（推奨）</small>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- Model Variant Selection -->
+                <div class="option-group" id="vitposeModelGroup" style="margin-left: 30px;">
+                    <label style="display: block; margin-bottom: 10px; color: #666;">
+                        <strong>モデル選択:</strong>
+                    </label>
+                    <select id="vitposeModel" style="padding: 8px 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1em; width: 100%; max-width: 300px;">
+                        <option value="vitpose-b" selected>VitPose-Base (推奨・高速)</option>
+                        <option value="vitpose-l">VitPose-Large (高精度)</option>
+                        <option value="vitpose-h">VitPose-Huge (最高精度・遅い)</option>
+                    </select>
+                    <small style="display: block; margin-top: 5px; color: #999;">
+                        ※初回使用時はモデルダウンロードに時間がかかります
+                    </small>
+                </div>
+
+                <!-- 3D Option -->
+                <div class="option-group" style="margin-top: 15px;">
+                    <label>
+                        <input type="checkbox" id="use3d">
+                        <span style="display: flex; flex-direction: column;">
+                            <strong>📐 3D姿勢推定を使用 (PoseFormer)</strong>
+                            <small style="color: #666; margin-left: 30px;">2D姿勢を3D空間に投影し、深度方向の動きも分析します</small>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Analyze Button -->
+            <button class="analyze-btn" id="analyzeBtn" disabled>
+                分析開始
+            </button>
+
+            <!-- Loading -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="font-size: 1.2em; font-weight: bold;">動画を分析中...</p>
+                <p style="margin-top: 10px; color: #666;">姿勢推定とフォーム比較を実行しています</p>
+            </div>
+
+            <!-- Results -->
+            <div class="results" id="results">
+                <!-- Overall Score -->
+                <div class="score-display">
+                    <div class="score-label">総合スコア</div>
+                    <div class="score-number" id="overallScore">0</div>
+                    <div class="score-label">/ 100</div>
+                </div>
+
+                <!-- Joint Scores -->
+                <h3 style="margin-bottom: 20px; color: #333;">部位別スコア</h3>
+                <div class="joint-scores" id="jointScores"></div>
+
+                <!-- AI Analysis -->
+                <div class="analysis-box">
+                    <h3>🤖 AI分析結果 (Ollama)</h3>
+                    <div class="analysis-text" id="analysisText"></div>
+                </div>
+
+                <!-- Deficiency Warning -->
+                <div id="deficiencySection" style="display: none; margin-bottom: 30px;">
+                    <div style="background: #fff3e0; border: 2px solid #ff9800; padding: 25px; border-radius: 15px;">
+                        <h3 style="color: #e65100; margin-bottom: 15px;">⚠ 欠損検知</h3>
+                        <p style="color: #666; margin-bottom: 15px;">T-pose登録時の体比率と比較して、以下の部位に異常な偏差が検出されました:</p>
+                        <div id="deficiencyList"></div>
+                    </div>
+                </div>
+
+                <!-- Video Comparison -->
+                <div class="video-comparison">
+                    <h3 style="margin-bottom: 20px; color: #333;">🎬 動画比較</h3>
+                    
+                    <!-- Tab Navigation -->
+                    <div class="video-tabs">
+                        <button class="video-tab active" onclick="showVideoTab('sidebyside')">
+                            📊 並列比較
+                        </button>
+                        <button class="video-tab" onclick="showVideoTab('reference')">
+                            🎯 参照動画
+                        </button>
+                        <button class="video-tab" onclick="showVideoTab('comparison')">
+                            👤 あなたのフォーム
+                        </button>
+                    </div>
+
+                    <!-- Video Panels -->
+                    <div class="video-panels">
+                        <div id="video-sidebyside" class="video-panel active">
+                            <video id="comparisonVideoPlayer" controls style="width: 100%;"></video>
+                            <div class="video-description">
+                                <p>
+                                    <strong>左:</strong> 参照動画（お手本）- 緑色の骨格<br>
+                                    <strong>右:</strong> あなたのフォーム - スコアで色分け
+                                </p>
+                            </div>
+                        </div>
+
+                        <div id="video-reference" class="video-panel">
+                            <video id="referenceOverlayPlayer" controls style="width: 100%;"></video>
+                            <div class="video-description">
+                                <p>
+                                    参照動画に姿勢データをオーバーレイ表示<br>
+                                    <span style="color: #4caf50;">■</span> すべての関節が理想的な位置
+                                </p>
+                            </div>
+                        </div>
+
+                        <div id="video-comparison" class="video-panel">
+                            <video id="comparisonOverlayPlayer" controls style="width: 100%;"></video>
+                            <div class="video-description">
+                                <p>
+                                    あなたのフォームを関節スコアで色分け表示<br>
+                                    <span style="color: #4caf50;">■</span> 80点以上 
+                                    <span style="color: #ffeb3b;">■</span> 60-79点 
+                                    <span style="color: #ff9800;">■</span> 40-59点 
+                                    <span style="color: #f44336;">■</span> 40点未満
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3D Visualization Section -->
+                <div id="visualization3DSection" style="display: none; margin-top: 40px;">
+                    <h3 style="margin-bottom: 20px; color: #333;">🎯 3D姿勢分析</h3>
+                    
+                    <!-- 3D Metrics -->
+                    <div class="analysis-box" id="metrics3DBox" style="display: none;">
+                        <h4 style="color: #667eea; margin-bottom: 15px;">3D精度メトリクス</h4>
+                        <div id="metrics3DContent"></div>
+                    </div>
+
+                    <!-- 3D Visualization Tabs -->
+                    <div class="viz-3d-tabs">
+                        <button class="viz-tab active" onclick="show3DTab('sidebyside')">
+                            📊 並列比較 (3D)
+                        </button>
+                        <button class="viz-tab" onclick="show3DTab('reference')">
+                            🎯 参照動画 (3D)
+                        </button>
+                        <button class="viz-tab" onclick="show3DTab('comparison')">
+                            👤 比較動画 (3D)
+                        </button>
+                        <button class="viz-tab" onclick="show3DTab('download')">
+                            💾 データダウンロード
+                        </button>
+                    </div>
+
+                    <div class="viz-3d-content">
+                        <div id="tab-sidebyside" class="viz-3d-panel active">
+                            <iframe id="iframe-sidebyside" style="width: 100%; height: 600px; border: none; border-radius: 15px;"></iframe>
+                        </div>
+                        <div id="tab-reference" class="viz-3d-panel">
+                            <iframe id="iframe-reference" style="width: 100%; height: 600px; border: none; border-radius: 15px;"></iframe>
+                        </div>
+                        <div id="tab-comparison" class="viz-3d-panel">
+                            <iframe id="iframe-comparison" style="width: 100%; height: 600px; border: none; border-radius: 15px;"></iframe>
+                        </div>
+                        <div id="tab-download" class="viz-3d-panel">
+                            <div style="text-align: center; padding: 40px;">
+                                <h4 style="margin-bottom: 20px;">3Dデータのダウンロード</h4>
+                                <p style="margin-bottom: 30px; color: #666;">
+                                    3D姿勢データをJSON形式でダウンロードして、<br>
+                                    外部ツールでさらに詳細な分析が可能です。
+                                </p>
+                                <a id="download3DLink" class="upload-label" style="text-decoration: none;">
+                                    📥 JSON形式でダウンロード
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="dataPanel" class="main-panel">
+            <div class="analysis-box" style="margin-bottom: 20px;">
+                <h3>📊 データ分析メニュー</h3>
+                <p class="analysis-text">
+                    「自分 vs 自分」モードの結果を上達/未上達で集計して、
+                    どの部位が変化しているかを表示します。
+                </p>
+            </div>
+
+            <button class="analyze-btn" id="trainingAnalysisBtn">
+                データ分析を実行
+            </button>
+
+            <div class="analysis-box" id="trainingSummaryBox" style="display: none;">
+                <h3>🧠 分析結果</h3>
+                <div class="analysis-text" id="trainingSummaryText"></div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <style>
+        .main-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .main-tab {
+            padding: 12px 24px;
+            background: #f8f9ff;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .main-tab:hover {
+            background: #e8f0ff;
+            border-color: #667eea;
+        }
+
+        .main-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .main-panel {
+            display: none;
+        }
+
+        .main-panel.active {
+            display: block;
+        }
+
+        .viz-3d-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .viz-tab {
+            padding: 12px 24px;
+            background: #f8f9ff;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .viz-tab:hover {
+            background: #e8f0ff;
+            border-color: #667eea;
+        }
+
+        .viz-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .video-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .video-tab {
+            padding: 12px 24px;
+            background: #f8f9ff;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            color: #666;
+            transition: all 0.3s;
+        }
+
+        .video-tab:hover {
+            background: #e8f0ff;
+            border-color: #667eea;
+        }
+
+        .video-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .video-panels {
+            position: relative;
+        }
+
+        .video-panel {
+            display: none;
+        }
+
+        .video-panel.active {
+            display: block;
+        }
+
+        .video-description {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .video-description strong {
+            color: #333;
+        }
+
+        .viz-3d-panel {
+            display: none;
+        }
+
+        .viz-3d-panel.active {
+            display: block;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .metric-value {
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+
+    <script>
+        const API_URL = 'http://localhost:5001/api';
+
+        let referenceVideoPath = null;
+        let comparisonVideoPath = null;
+        let current3DData = null;
+
+        // --- T-pose file name display ---
+        document.getElementById('tposeImage').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('tposeFilename').textContent = file.name;
+            }
+        });
+
+        // --- Load user data when username is entered ---
+        let usernameTimeout = null;
+        document.getElementById('usernameInput').addEventListener('input', (e) => {
+            clearTimeout(usernameTimeout);
+            usernameTimeout = setTimeout(() => loadUserData(e.target.value.trim()), 500);
+        });
+
+        async function loadUserData(username) {
+            const ratiosSection = document.getElementById('userRatios');
+            if (!username) {
+                ratiosSection.style.display = 'none';
+                return;
+            }
+            try {
+                const response = await fetch(`${API_URL}/user/${encodeURIComponent(username)}`);
+                const result = await response.json();
+                if (result.success && result.user && result.user.body_ratios) {
+                    displayUserRatios(result.user.body_ratios);
+                } else {
+                    ratiosSection.style.display = 'none';
+                }
+            } catch (e) {
+                ratiosSection.style.display = 'none';
+            }
+        }
+
+        function displayUserRatios(ratios) {
+            const segNames = {
+                'left_upper_arm': '左上腕', 'left_forearm': '左前腕',
+                'right_upper_arm': '右上腕', 'right_forearm': '右前腕',
+                'left_thigh': '左太もも', 'left_shin': '左すね',
+                'right_thigh': '右太もも', 'right_shin': '右すね'
+            };
+            const container = document.getElementById('userRatiosContent');
+            container.innerHTML = '';
+            for (const [seg, val] of Object.entries(ratios)) {
+                if (val === null) continue;
+                const name = segNames[seg] || seg;
+                const item = document.createElement('div');
+                item.style.cssText = 'background: white; padding: 8px 12px; border-radius: 8px; text-align: center;';
+                item.innerHTML = `<div style="font-size:0.8em;color:#666;">${name}</div><div style="font-weight:bold;color:#667eea;">${val.toFixed(3)}</div>`;
+                container.appendChild(item);
+            }
+            document.getElementById('userRatios').style.display = 'block';
+        }
+
+        // --- T-pose registration ---
+        async function registerTpose() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const fileInput = document.getElementById('tposeImage');
+            const statusDiv = document.getElementById('tposeStatus');
+
+            if (!username) {
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<span style="color: #f44336;">ユーザー名を入力してください</span>';
+                return;
+            }
+            if (!fileInput.files[0]) {
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<span style="color: #f44336;">T-pose写真を選択してください</span>';
+                return;
+            }
+
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<span style="color: #667eea;">登録中...</span>';
+
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            formData.append('username', username);
+
+            try {
+                const response = await fetch(`${API_URL}/user/tpose`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.innerHTML = `<span style="color: #4caf50;">${result.message}</span>`;
+                    if (result.body_ratios) {
+                        displayUserRatios(result.body_ratios);
+                    }
+                } else {
+                    statusDiv.innerHTML = `<span style="color: #f44336;">エラー: ${result.error}</span>`;
+                }
+            } catch (error) {
+                console.error('T-pose registration error:', error);
+                statusDiv.innerHTML = '<span style="color: #f44336;">登録中にエラーが発生しました</span>';
+            }
+        }
+
+        function showMainTab(tabName) {
+            document.querySelectorAll('.main-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.main-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById(tabName + 'Panel').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function updateCompareModeUI() {
+            const mode = document.getElementById('compareMode').value;
+            const selfGroup = document.getElementById('selfImprovedGroup');
+            const referenceTitle = document.getElementById('referenceTitle');
+            const comparisonTitle = document.getElementById('comparisonTitle');
+
+            if (mode === 'self_vs_self') {
+                selfGroup.style.display = 'block';
+                referenceTitle.textContent = '参照動画 (自分・過去/基準)';
+                comparisonTitle.textContent = '比較動画 (自分・現在)';
+            } else {
+                selfGroup.style.display = 'none';
+                referenceTitle.textContent = '参照動画 (お手本)';
+                comparisonTitle.textContent = '比較動画 (あなたのフォーム)';
+            }
+        }
+
+        function getSelfImprovedValue() {
+            const selected = document.querySelector('input[name="selfImproved"]:checked');
+            return selected ? selected.value === 'true' : null;
+        }
+
+        function show3DTab(tabName) {
+            document.querySelectorAll('.viz-3d-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.viz-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function showVideoTab(tabName) {
+            document.querySelectorAll('.video-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.querySelectorAll('.video-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.getElementById('video-' + tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            document.querySelectorAll('video').forEach(video => {
+                video.pause();
+            });
+        }
+
+        document.getElementById('compareMode').addEventListener('change', updateCompareModeUI);
+        updateCompareModeUI();
+
+        // File upload handlers
+        document.getElementById('referenceVideo').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await uploadVideo(file, 'reference');
+                document.getElementById('referenceFilename').textContent = file.name;
+                document.getElementById('referenceBox').classList.add('active');
+                checkReadyToAnalyze();
+            }
+        });
+
+        document.getElementById('comparisonVideo').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await uploadVideo(file, 'comparison');
+                document.getElementById('comparisonFilename').textContent = file.name;
+                document.getElementById('comparisonBox').classList.add('active');
+                checkReadyToAnalyze();
+            }
+        });
+
+        async function uploadVideo(file, type) {
+            const formData = new FormData();
+            formData.append('video', file);
+            formData.append('type', type);
+
+            try {
+                const response = await fetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    if (type === 'reference') {
+                        referenceVideoPath = result.filepath;
+                    } else {
+                        comparisonVideoPath = result.filepath;
+                    }
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('動画のアップロードに失敗しました');
+            }
+        }
+
+        function checkReadyToAnalyze() {
+            const btn = document.getElementById('analyzeBtn');
+            btn.disabled = !(referenceVideoPath && comparisonVideoPath);
+        }
+
+        document.getElementById('analyzeBtn').addEventListener('click', async () => {
+            const use3d = document.getElementById('use3d').checked;
+            const useVitpose = document.getElementById('useVitpose').checked;
+            const vitposeModel = document.getElementById('vitposeModel').value;
+            const compareMode = document.getElementById('compareMode').value;
+            const selfImproved = compareMode === 'self_vs_self' ? getSelfImprovedValue() : null;
+            const username = document.getElementById('usernameInput').value.trim();
+
+            // Show loading
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('results').classList.remove('active');
+
+            try {
+                const response = await fetch(`${API_URL}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reference_video: referenceVideoPath,
+                        comparison_video: comparisonVideoPath,
+                        use_3d: use3d,
+                        use_vitpose: useVitpose,
+                        model_variant: vitposeModel,
+                        compare_mode: compareMode,
+                        self_improved: selfImproved,
+                        username: username
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayResults(result);
+                } else {
+                    alert('分析に失敗しました: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Analysis error:', error);
+                alert('分析中にエラーが発生しました');
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+            }
+        });
+
+        document.getElementById('trainingAnalysisBtn').addEventListener('click', async () => {
+            const summaryBox = document.getElementById('trainingSummaryBox');
+            const summaryText = document.getElementById('trainingSummaryText');
+            summaryBox.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_URL}/training/summary`);
+                const result = await response.json();
+
+                if (result.success) {
+                    summaryText.textContent = result.message;
+                } else {
+                    summaryText.textContent = result.message || '分析データが不足しています。';
+                }
+
+                summaryBox.style.display = 'block';
+                summaryBox.scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                console.error('Training summary error:', error);
+                summaryText.textContent = 'データ分析中にエラーが発生しました。';
+                summaryBox.style.display = 'block';
+            }
+        });
+
+        function displayResults(result) {
+            // Show results section
+            document.getElementById('results').classList.add('active');
+
+            // Overall score
+            const scoreElement = document.getElementById('overallScore');
+            scoreElement.textContent = result.score.toFixed(1);
+
+            if (result.score >= 80) {
+                scoreElement.className = 'score-number score-high';
+            } else if (result.score >= 60) {
+                scoreElement.className = 'score-number score-medium';
+            } else {
+                scoreElement.className = 'score-number score-low';
+            }
+
+            // Joint scores
+            const jointScoresContainer = document.getElementById('jointScores');
+            jointScoresContainer.innerHTML = '';
+
+            for (const [joint, score] of Object.entries(result.joint_scores)) {
+                const scoreItem = document.createElement('div');
+                scoreItem.className = 'joint-score-item';
+
+                let scoreClass = 'score-high';
+                if (score < 80) scoreClass = 'score-medium';
+                if (score < 60) scoreClass = 'score-low';
+
+                scoreItem.innerHTML = `
+                    <h4>${getJointJapaneseName(joint)}</h4>
+                    <div class="joint-score-value ${scoreClass}">${score.toFixed(1)}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${score}%"></div>
+                    </div>
+                `;
+                jointScoresContainer.appendChild(scoreItem);
+            }
+
+            // AI Analysis
+            document.getElementById('analysisText').textContent = result.analysis;
+
+            // Deficiency detection display
+            const defSection = document.getElementById('deficiencySection');
+            if (result.deficiencies && result.deficiencies.length > 0) {
+                const defList = document.getElementById('deficiencyList');
+                defList.innerHTML = '';
+                result.deficiencies.forEach(def => {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'background: white; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #ff9800;';
+                    let detail = '';
+                    if (def.reason === 'not_detected') {
+                        detail = '検出されませんでした（欠損の可能性）';
+                    } else {
+                        detail = `比率偏差: ${def.deviation.toFixed(1)}% (登録: ${def.registered_ratio.toFixed(3)}, 現在: ${def.current_ratio.toFixed(3)})`;
+                    }
+                    item.innerHTML = `<strong style="color:#e65100;">${def.segment_ja}</strong><span style="color:#666; margin-left:10px;">${detail}</span>`;
+                    defList.appendChild(item);
+                });
+                defSection.style.display = 'block';
+            } else {
+                defSection.style.display = 'none';
+            }
+
+            // Comparison video
+            if (result.output_video) {
+                const videoElement = document.getElementById('comparisonVideoPlayer');
+                videoElement.src = `${API_URL}/outputs/${result.output_video}`;
+                videoElement.load();
+            }
+
+            // Individual overlay videos
+            if (result.reference_overlay) {
+                const refOverlayElement = document.getElementById('referenceOverlayPlayer');
+                refOverlayElement.src = `${API_URL}/outputs/${result.reference_overlay}`;
+                refOverlayElement.load();
+            }
+
+            if (result.comparison_overlay) {
+                const compOverlayElement = document.getElementById('comparisonOverlayPlayer');
+                compOverlayElement.src = `${API_URL}/outputs/${result.comparison_overlay}`;
+                compOverlayElement.load();
+            }
+
+            // 3D Visualization
+            if (result.use_3d && result.visualization_3d) {
+                current3DData = result.visualization_3d;
+                display3DVisualization(result.visualization_3d);
+            } else {
+                document.getElementById('visualization3DSection').style.display = 'none';
+            }
+
+            // Scroll to results
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function display3DVisualization(viz3d) {
+            const section = document.getElementById('visualization3DSection');
+            section.style.display = 'block';
+
+            if (viz3d.metrics_3d) {
+                const metricsBox = document.getElementById('metrics3DBox');
+                const metricsContent = document.getElementById('metrics3DContent');
+
+                metricsBox.style.display = 'block';
+
+                let metricsHTML = '';
+                metricsHTML += `
+                    <div class="metric-item">
+                        <span class="metric-label">平均3D誤差 (MPJPE):</span>
+                        <span class="metric-value">${viz3d.metrics_3d.mean_mpjpe.toFixed(4)}</span>
+                    </div>
+                `;
+
+                const sortedErrors = Object.entries(viz3d.metrics_3d.mean_joint_errors)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                metricsHTML += '<h4 style="margin-top: 20px; color: #666;">3D誤差が大きい関節 (トップ5):</h4>';
+                sortedErrors.forEach(([joint, error]) => {
+                    metricsHTML += `
+                        <div class="metric-item">
+                            <span class="metric-label">${getJointJapaneseName(joint)}:</span>
+                            <span class="metric-value">${error.toFixed(4)}</span>
+                        </div>
+                    `;
+                });
+
+                metricsContent.innerHTML = metricsHTML;
+            }
+
+            if (viz3d.comparison_3d_sidebyside) {
+                document.getElementById('iframe-sidebyside').src =
+                    `${API_URL}/outputs/${viz3d.comparison_3d_sidebyside}`;
+            }
+            if (viz3d.reference_3d) {
+                document.getElementById('iframe-reference').src =
+                    `${API_URL}/outputs/${viz3d.reference_3d}`;
+            }
+            if (viz3d.comparison_3d) {
+                document.getElementById('iframe-comparison').src =
+                    `${API_URL}/outputs/${viz3d.comparison_3d}`;
+            }
+
+            if (viz3d.json_3d) {
+                const downloadLink = document.getElementById('download3DLink');
+                downloadLink.href = `${API_URL}/outputs/${viz3d.json_3d}`;
+                downloadLink.download = viz3d.json_3d;
+            }
+        }
+
+        function getJointJapaneseName(joint) {
+            const names = {
+                'nose': '鼻',
+                'left_eye': '左目',
+                'right_eye': '右目',
+                'left_ear': '左耳',
+                'right_ear': '右耳',
+                'left_shoulder': '左肩',
+                'right_shoulder': '右肩',
+                'left_elbow': '左肘',
+                'right_elbow': '右肘',
+                'left_wrist': '左手首',
+                'right_wrist': '右手首',
+                'left_hip': '左腰',
+                'right_hip': '右腰',
+                'left_knee': '左膝',
+                'right_knee': '右膝',
+                'left_ankle': '左足首',
+                'right_ankle': '右足首'
+            };
+            return names[joint] || joint;
+        }
+    </script>
+</body>
+</html>
